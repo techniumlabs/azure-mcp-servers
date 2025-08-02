@@ -229,3 +229,22 @@ class ADORerunPipelineStageResponse(Dict[str, Any]):
         self.status = status
         self.message = message
         self.rerun_info = rerun_info
+
+
+class ADOListWikiPagesResponse(Dict[str, Any]):
+    """Response model for listing wiki pages in Azure DevOps."""
+
+    def __init__(self, status: str, message: str, wikis: List[Dict[str, Any]], count: int):
+        """Initialize Azure DevOps wiki pages response.
+
+        Args:
+            status: Status of the operation (success/error)
+            message: Message describing the result
+            wikis: List of wiki pages
+            count: Number of wiki pages returned
+        """
+        super().__init__({'status': status, 'message': message, 'wikis': wikis, 'count': count})
+        self.status = status
+        self.message = message
+        self.wikis = wikis
+        self.count = count

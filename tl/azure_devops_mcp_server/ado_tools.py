@@ -25,6 +25,7 @@ from tl.azure_devops_mcp_server.models import (
     ADOListRepositoriesResponse,
     ADORerunPipelineStageResponse,
     ADORunPipelineResponse,
+    ADOListWikiPagesResponse,
 )
 from typing import Any, Dict, List, Optional
 
@@ -131,6 +132,10 @@ class AzureDevOpsTools:
             name='rerun_pipeline_stage',
             description='Rerun a specific stage of a pipeline in Azure DevOps',
         )(self.rerun_pipeline_stage)
+        self.mcp.tool(
+            name='list_wiki_pages',
+            description='List all wiki pages in a project',
+        )(self.list_wiki_pages)
 
     def list_projects(
         self,
@@ -2683,3 +2688,87 @@ class AzureDevOpsTools:
                 'error': str(e),
                 'pipeline_type': 'release',
             }
+
+    def list_wiki_pages(
+        self,
+        ctx: Context,
+        project_name: str,
+    ) -> ADOListWikiPagesResponse:
+        """List all wiki pages in a project.
+        Args:
+            ctx: The FastMCP context
+            project_name: Name of the project to list wiki pages from
+        Returns:
+            ADOListWikiPagesResponse containing the list of wiki pages and their count
+        """
+        try:
+            # Validate project name
+            if not project_name or not project_name.strip():
+                raise ValueError('Project name is required')
+
+            project_name = project_name.strip()
+
+            # Construct the API URL for listing wikis
+            api_url = f'{self.organization_url}{project_name}/_apis/wiki/wikis'
+            params = {'api-version': '7.1'}
+
+            # Make the API call
+            response = requests.get(api_url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+
+            # Parse the response
+            data = response.json()
+            wikis_data = data.get('value', [])
+            result = []
+            for wiki in wikis_data:
+                wiki_info = {
+                    'id': wiki.get('id', ''),
+                    'name': wiki.get('name', ''),
+                    'project_name': wiki.get('project', {}).get('name', ''),
+                    'repository_id': wiki.get('repositoryId', ''),
+                    'url': wiki.get('remoteUrl', ''),
+                }
+                result.append(wiki_info)
+
+            # Sort wikis by name for consistent output
+            result.sort(key=lambda x: x['name'].lower())
+
+            logger.info(
+                f'Successfully retrieved {len(result)} wiki pages from project: {project_name}'
+            )
+            logfire.info(
+                'Listed Azure DevOps wiki pages',
+                count=len(result),
+                project_name=project_name,
+                organization_url=self.organization_url,
+            )
+
+            return ADOListWikiPagesResponse(
+                status='success',
+                message=f'Successfully retrieved wiki pages from project: {project_name}',
+                wikis=result,
+                count=len(result),
+            )
+
+        except requests.exceptions.RequestException as e:
+            error_message = f'HTTP error while listing Azure DevOps wiki pages: {str(e)}'
+            logger.error(error_message)
+            logfire.error('Failed to list Azure DevOps wiki pages', error=str(e))
+
+            return ADOListWikiPagesResponse(
+                status='error',
+                message=error_message,
+                wikis=[],
+                count=0,
+            )
+        except Exception as e:
+            error_message = f'Error listing Azure DevOps wiki pages: {str(e)}'
+            logger.error(error_message)
+            logfire.error('Failed to list Azure DevOps wiki pages', error=str(e))
+
+            return ADOListWikiPagesResponse(
+                status='error',
+                message=error_message,
+                wikis=[],
+                count=0,
+            )
